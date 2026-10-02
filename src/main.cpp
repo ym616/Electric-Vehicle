@@ -391,7 +391,11 @@ void setup() {
     
     // 4. Retry loop (sometimes the ESP32 needs a second attempt)
     for (int i = 0; i < 3; i++) {
-      status = WiFi.beginAP(ssid, pass);
+      if (strlen(pass) == 0) {
+        status = WiFi.beginAP(ssid); // Correct way to make an open network
+      } else {
+        status = WiFi.beginAP(ssid, pass); // WPA2 requires 8+ characters
+      }
       if (status == WL_AP_LISTENING) break;
       Serial.println("AP Creation Failed, retrying...");
       delay(1000);
