@@ -358,6 +358,9 @@ void stopRun();
 void setup() {
   Serial.begin(115200);
 
+  // 1. Give the ESP32-S3 coprocessor time to boot reliably on cold power-up
+  delay(1500); 
+
   // Load persistence
   loadSettings();
 
@@ -372,19 +375,35 @@ void setup() {
   pinMode(START_SWITCH, INPUT_PULLUP);
 
   if (WiFi.status() == WL_NO_MODULE) {
-    Serial.println("WiFi Module Failed!");
-    while (true);
-  }
+    Serial.println("WiFi Module Failed! Running offline.");
+  } else {
+    // 2. Clear out any hung state from a previous brown-out or reset
+    WiFi.disconnect();
+    delay(500);
 
-  Serial.print("Creating AP: "); Serial.println(ssid);
-  status = WiFi.beginAP(ssid, pass);
-  if (status != WL_AP_LISTENING) {
-    Serial.println("AP Creation Failed");
-    while (true);
+    // 3. Explicitly configure the AP's IP to fix Android/iOS "Connection Failure" / DHCP issues
+    IPAddress local_ip(192, 168, 4, 1);
+    IPAddress gateway(192, 168, 4, 1);
+    IPAddress subnet(255, 255, 255, 0);
+    WiFi.config(local_ip, gateway, subnet);
+
+    Serial.print("Creating AP: "); Serial.println(ssid);
+    
+    // 4. Retry loop (sometimes the ESP32 needs a second attempt)
+    for (int i = 0; i < 3; i++) {
+      status = WiFi.beginAP(ssid, pass);
+      if (status == WL_AP_LISTENING) break;
+      Serial.println("AP Creation Failed, retrying...");
+      delay(1000);
+    }
+
+    if (status == WL_AP_LISTENING) {
+      server.begin();
+      Serial.print("SciOly EV Ready! IP: http://"); Serial.println(WiFi.localIP());
+    } else {
+      Serial.println("Fatal: Could not create AP. Running offline mode.");
+    }
   }
-  
-  server.begin();
-  Serial.print("SciOly EV Ready! IP: http://"); Serial.println(WiFi.localIP());
 }
 
 // =================================================================
