@@ -378,8 +378,12 @@ void setup() {
 
   Serial.print("Creating AP: "); Serial.println(ssid);
   status = WiFi.beginAP(ssid, pass);
-  server.begin();
+  if (status != WL_AP_LISTENING) {
+    Serial.println("AP Creation Failed");
+    while (true);
+  }
   
+  server.begin();
   Serial.print("SciOly EV Ready! IP: http://"); Serial.println(WiFi.localIP());
 }
 
@@ -519,7 +523,7 @@ void handleWiFi() {
   
   while (client.connected()) {
     runStateMachine(); 
-    if (millis() - startTime > 1000) { client.stop(); return; } 
+    if (millis() - startTime > 2000) { client.stop(); return; } // Increased timeout
 
     if (client.available()) {
       char c = client.read();
@@ -529,15 +533,24 @@ void handleWiFi() {
           
           if (request.indexOf("GET /cmd?act=start") >= 0) {
             runCommand = true; 
-            client.println("HTTP/1.1 200 OK\nConnection: close\n"); break; 
+            client.println("HTTP/1.1 200 OK");
+            client.println("Connection: close");
+            client.println();
+            break; 
           }
           else if (request.indexOf("GET /cmd?act=stop") >= 0) {
             stopRun();
-            client.println("HTTP/1.1 200 OK\nConnection: close\n"); break;
+            client.println("HTTP/1.1 200 OK");
+            client.println("Connection: close");
+            client.println();
+            break;
           }
           else if (request.indexOf("GET /cmd?act=save") >= 0) {
             saveSettings();
-            client.println("HTTP/1.1 200 OK\nConnection: close\n"); break;
+            client.println("HTTP/1.1 200 OK");
+            client.println("Connection: close");
+            client.println();
+            break;
           }
           else if (request.indexOf("GET /set?") >= 0) {
             int idx;
@@ -556,16 +569,27 @@ void handleWiFi() {
             if((idx = request.indexOf("&rmp=")) > 0) cfg.maxAccelRamp = request.substring(idx+5).toFloat();
             if((idx = request.indexOf("&st=")) > 0) cfg.settleTimeMs = request.substring(idx+4).toInt();
             
-            client.println("HTTP/1.1 200 OK\nConnection: close\n"); break;
+            client.println("HTTP/1.1 200 OK");
+            client.println("Connection: close");
+            client.println();
+            break;
           }
           else if (request.indexOf("GET /status") >= 0) {
-            client.println("HTTP/1.1 200 OK\nContent-Type: application/json\nConnection: close\n");
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-Type: application/json");
+            client.println("Connection: close");
+            client.println();
             
+            runStateMachine(); 
+
             float err = setpoint - getDistanceCm();
             float t = (currentState != STATE_IDLE) ? (millis() - runStartTime) / 1000.0 : 0;
 
             client.print("{\"d\":"); client.print(getDistanceCm(), 2);
             client.print(",\"e\":"); client.print(err, 2);
+            
+            runStateMachine(); 
+            
             client.print(",\"sp\":"); client.print(setpoint, 2);
             client.print(",\"p\":"); client.print(currentPwmOutput);
             client.print(",\"t\":"); client.print(t, 1);
@@ -574,7 +598,13 @@ void handleWiFi() {
             break; 
           }
           else if (request.indexOf("GET /settings") >= 0) {
-            client.println("HTTP/1.1 200 OK\nContent-Type: application/json\nConnection: close\n");
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-Type: application/json");
+            client.println("Connection: close");
+            client.println();
+            
+            runStateMachine(); 
+
             client.print("{\"td\":"); client.print(cfg.targetDistanceCm);
             client.print(",\"bld\":"); client.print(cfg.bottleLineDistanceCm);
             client.print(",\"tt\":"); client.print(cfg.targetTimeSeconds);
@@ -582,6 +612,9 @@ void handleWiFi() {
             client.print(",\"pc\":"); client.print(cfg.pushClearanceCm);
             client.print(",\"c\":"); client.print(cfg.cmPerCount, 6);
             client.print(",\"db\":"); client.print(cfg.deadbandCm);
+            
+            runStateMachine();
+
             client.print(",\"kp\":"); client.print(cfg.Kp);
             client.print(",\"ki\":"); client.print(cfg.Ki);
             client.print(",\"kd\":"); client.print(cfg.Kd);
@@ -593,7 +626,12 @@ void handleWiFi() {
             break;
           }
           else {
-            client.println("HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: close\nCache-Control: no-store\n");
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-Type: text/html");
+            client.println("Connection: close");
+            client.println("Cache-Control: no-store, no-cache, must-revalidate");
+            client.println();
+            
             int len = strlen_P(index_html);
             for (int k = 0; k < len; k += 100) {
                runStateMachine(); 
